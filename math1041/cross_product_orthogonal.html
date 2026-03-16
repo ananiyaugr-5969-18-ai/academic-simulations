@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross Product - Math 1041</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --background: 240 10% 3.9%; --foreground: 0 0% 98%; --border: 240 3.7% 15.9%; --radius: 0.5rem; }
+        body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; overflow: hidden; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+        #ui-layer > * { pointer-events: auto; }
+        .stat-card { background: rgba(24, 24, 27, 0.8); backdrop-filter: blur(8px); border: 1px solid hsl(var(--border)); border-radius: var(--radius); padding: 1rem; width: fit-content; }
+    </style>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+</head>
+<body>
+    <div id="canvas-container" class="absolute inset-0 w-full h-full"></div>
+    <div id="ui-layer">
+        <div class="stat-card">
+            <h2 class="text-sm font-semibold mb-2 opacity-70">CROSS PRODUCT</h2>
+            <p class="text-xs text-blue-400 font-mono mb-4 italic">Prediction Prompt: What happens to the direction of (A x B) if you swap A and B?</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] uppercase tracking-wider opacity-50 block mb-1">Vector A (Blue) Rotation</label>
+                    <input type="range" id="ry" min="0" max="6.28" step="0.1" value="0.5" class="w-full">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase tracking-wider opacity-50 block mb-1">Vector B (Red) Rotation</label>
+                    <input type="range" id="rz" min="0" max="6.28" step="0.1" value="1.5" class="w-full">
+                </div>
+                <div class="pt-2 border-t border-white/10">
+                    <p class="text-xs font-mono text-yellow-500">A x B (Yellow): <span id="cross-val">---</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x09090b);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 5, 5);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        scene.add(new THREE.GridHelper(20, 20, 0x27272a, 0x18181b));
+
+        const arrowA = new THREE.ArrowHelper(new THREE.Vector3(), new THREE.Vector3(), 3, 0x3b82f6);
+        const arrowB = new THREE.ArrowHelper(new THREE.Vector3(), new THREE.Vector3(), 3, 0xef4444);
+        const arrowC = new THREE.ArrowHelper(new THREE.Vector3(), new THREE.Vector3(), 1, 0xeab308);
+        scene.add(arrowA, arrowB, arrowC);
+
+        function update() {
+            const ay = parseFloat(document.getElementById('ry').value);
+            const bz = parseFloat(document.getElementById('rz').value);
+
+            const vA = new THREE.Vector3(3, 0, 0).applyEuler(new THREE.Euler(0, ay, 0));
+            const vB = new THREE.Vector3(0, 3, 0).applyEuler(new THREE.Euler(0, 0, bz));
+            const vC = vA.clone().cross(vB);
+
+            arrowA.setDirection(vA.clone().normalize()); arrowA.setLength(vA.length());
+            arrowB.setDirection(vB.clone().normalize()); arrowB.setLength(vB.length());
+            arrowC.setDirection(vC.clone().normalize()); arrowC.setLength(vC.length() || 0.001);
+
+            document.getElementById('cross-val').innerText = `(${vC.x.toFixed(1)}, ${vC.y.toFixed(1)}, ${vC.z.toFixed(1)})`;
+        }
+
+        document.getElementById('ry').addEventListener('input', update);
+        document.getElementById('rz').addEventListener('input', update);
+        update();
+
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        animate();
+    </script>
+</body>
+</html>
