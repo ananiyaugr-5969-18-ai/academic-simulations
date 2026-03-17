@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation: Vectors in R² and R³</title>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-hover-sidebar: #EFEFEE;
+            --notion-hover-main: #F1F1EF;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-text-placeholder: #9A9A97;
+            --notion-border: #E9E9E7;
+            --notion-blue: #337EA9;
+            --notion-red: #EB5757;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--notion-bg-sidebar);
+            border: 1px solid var(--notion-border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .prediction-prompt {
+            background: var(--notion-hover-main);
+            border-left: 4px solid var(--notion-blue);
+            color: var(--notion-text-primary);
+            font-weight: 500;
+        }
+
+        canvas {
+            background: white;
+            border: 1px solid var(--notion-border);
+            border-radius: 4px;
+            width: 100%;
+            height: auto;
+            cursor: crosshair;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--notion-text-secondary);
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .stats {
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .vector-label {
+            font-weight: bold;
+        }
+
+        .blue { color: var(--notion-blue); }
+        .red { color: var(--notion-red); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card prediction-prompt">
+            💡 <strong>Prediction Prompt:</strong> Before moving the sliders, what do you think will happen to the <strong>resultant vector</strong> (black) if you double the magnitude of vector <strong>u</strong> (blue)?
+        </div>
+
+        <div class="card">
+            <canvas id="vectorCanvas" width="800" height="500"></canvas>
+            
+            <div class="stats">
+                <div>
+                    <span class="vector-label blue">Vector u:</span> <span id="valU">(2, 3)</span><br>
+                    <span class="vector-label red">Vector v:</span> <span id="valV">(4, -1)</span>
+                </div>
+                <div>
+                    <span class="vector-label">Resultant u + v:</span> <span id="valSum">(6, 2)</span><br>
+                    <span class="vector-label">Scalar c (for u):</span> <span id="valC">1.0</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>u.x: <span id="uxLabel">2</span></label>
+                    <input type="range" id="ux" min="-10" max="10" step="0.5" value="2">
+                </div>
+                <div class="control-group">
+                    <label>u.y: <span id="uyLabel">3</span></label>
+                    <input type="range" id="uy" min="-10" max="10" step="0.5" value="3">
+                </div>
+                <div class="control-group">
+                    <label>v.x: <span id="vxLabel">4</span></label>
+                    <input type="range" id="vx" min="-10" max="10" step="0.5" value="4">
+                </div>
+                <div class="control-group">
+                    <label>v.y: <span id="vyLabel">-1</span></label>
+                    <input type="range" id="vy" min="-10" max="10" step="0.5" value="-1">
+                </div>
+                <div class="control-group">
+                    <label>Scalar c: <span id="cLabel">1.0</span></label>
+                    <input type="range" id="scalarC" min="-2" max="2" step="0.1" value="1">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('vectorCanvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        
+        // Handle High DPI displays
+        const width = 800;
+        const height = 500;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const gridSize = 40;
+        const origin = { x: width / 2, y: height / 2 };
+
+        const inputs = {
+            ux: document.getElementById('ux'),
+            uy: document.getElementById('uy'),
+            vx: document.getElementById('vx'),
+            vy: document.getElementById('vy'),
+            c: document.getElementById('scalarC')
+        };
+
+        const labels = {
+            ux: document.getElementById('uxLabel'),
+            uy: document.getElementById('uyLabel'),
+            vx: document.getElementById('vxLabel'),
+            vy: document.getElementById('vyLabel'),
+            c: document.getElementById('cLabel'),
+            valU: document.getElementById('valU'),
+            valV: document.getElementById('valV'),
+            valSum: document.getElementById('valSum'),
+            valC: document.getElementById('valC')
+        };
+
+        function drawGrid() {
+            ctx.strokeStyle = '#E9E9E7';
+            ctx.lineWidth = 1;
+
+            for (let x = 0; x <= width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+
+            for (let y = 0; y <= height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            // Axes
+            ctx.strokeStyle = '#37352F';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, origin.y);
+            ctx.lineTo(width, origin.y);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(origin.x, 0);
+            ctx.lineTo(origin.x, height);
+            ctx.stroke();
+        }
+
+        function drawVector(x, y, color, start = {x: 0, y: 0}, label = '', dash = false) {
+            const endX = origin.x + (start.x + x) * gridSize;
+            const endY = origin.y - (start.y + y) * gridSize;
+            const startX = origin.x + start.x * gridSize;
+            const startY = origin.y - start.y * gridSize;
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            if (dash) ctx.setLineDash([5, 5]);
+
+            // Line
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Arrowhead
+            const angle = Math.atan2(startY - endY, startX - endX);
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX + 15 * Math.cos(angle - Math.PI/6), endY + 15 * Math.sin(angle - Math.PI/6));
+            ctx.lineTo(endX + 15 * Math.cos(angle + Math.PI/6), endY + 15 * Math.sin(angle + Math.PI/6));
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // Label
+            if (label) {
+                ctx.fillStyle = color;
+                ctx.font = 'bold 16px sans-serif';
+                ctx.fillText(label, endX + 10, endY - 10);
+            }
+            ctx.restore();
+        }
+
+        function update() {
+            const ux = parseFloat(inputs.ux.value);
+            const uy = parseFloat(inputs.uy.value);
+            const vx = parseFloat(inputs.vx.value);
+            const vy = parseFloat(inputs.vy.value);
+            const c = parseFloat(inputs.c.value);
+
+            labels.ux.textContent = ux;
+            labels.uy.textContent = uy;
+            labels.vx.textContent = vx;
+            labels.vy.textContent = vy;
+            labels.c.textContent = c.toFixed(1);
+
+            labels.valU.textContent = `(${ux}, ${uy})`;
+            labels.valV.textContent = `(${vx}, ${vy})`;
+            labels.valSum.textContent = `(${(c*ux + vx).toFixed(1)}, ${(c*uy + vy).toFixed(1)})`;
+            labels.valC.textContent = c.toFixed(1);
+
+            ctx.clearRect(0, 0, width, height);
+            drawGrid();
+
+            // Draw cu
+            drawVector(c * ux, c * uy, '#337EA9', {x: 0, y: 0}, 'cu');
+            
+            // Draw v starting from cu (Tip-to-Tail)
+            drawVector(vx, vy, '#EB5757', {x: c * ux, y: c * uy}, 'v');
+
+            // Draw original v from origin for comparison (dashed)
+            drawVector(vx, vy, '#EB5757', {x: 0, y: 0}, '', true);
+
+            // Draw resultant
+            drawVector(c * ux + vx, c * uy + vy, '#37352F', {x: 0, y: 0}, 'cu + v');
+        }
+
+        Object.values(inputs).forEach(input => input.addEventListener('input', update));
+        update();
+    </script>
+</body>
+</html>
