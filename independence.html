@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation: Linear Independence</title>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-hover-sidebar: #EFEFEE;
+            --notion-hover-main: #F1F1EF;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-border: #E9E9E7;
+            --notion-blue: #337EA9;
+            --notion-red: #EB5757;
+            --notion-purple: #9065B0;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--notion-bg-sidebar);
+            border: 1px solid var(--notion-border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .prediction-prompt {
+            background: var(--notion-hover-main);
+            border-left: 4px solid var(--notion-purple);
+            color: var(--notion-text-primary);
+            font-weight: 500;
+        }
+
+        #view3d {
+            width: 100%;
+            height: 400px;
+            background: white;
+            border: 1px solid var(--notion-border);
+            border-radius: 4px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .status {
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .independent { background: #E1F0E5; color: #377E47; }
+        .dependent { background: #FDEBEC; color: #EB5757; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card prediction-prompt">
+            💡 <strong>Prediction Prompt:</strong> If three vectors in R³ lie in the same <strong>Plane</strong>, are they Linearly Independent or Dependent? Try to align them to see!
+        </div>
+
+        <div class="card">
+            <div id="view3d"></div>
+            
+            <div style="margin-top: 10px;">
+                <p><strong>Vector Status:</strong> <span id="status" class="status independent">Linearly Independent</span></p>
+                <p style="font-size: 0.8rem; color: var(--notion-text-secondary);">Hint: Move the vectors to make them coplanar or collinear.</p>
+            </div>
+
+            <div class="controls">
+                <div>
+                    <label style="color: var(--notion-blue);">Vector u (Blue) Angle:</label>
+                    <input type="range" id="uAngle" min="0" max="360" value="0" style="width:100%">
+                </div>
+                <div>
+                    <label style="color: var(--notion-red);">Vector v (Red) Angle:</label>
+                    <input type="range" id="vAngle" min="0" max="360" value="120" style="width:100%">
+                </div>
+                <div>
+                    <label style="color: var(--notion-purple);">Vector w (Purple) Elevation:</label>
+                    <input type="range" id="wElev" min="-90" max="90" value="45" style="width:100%">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const container = document.getElementById('view3d');
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        scene.add(new THREE.GridHelper(10, 10, 0x37352f, 0xe9e9e7));
+        scene.add(new THREE.AxesHelper(5));
+
+        function createVector(color) {
+            const group = new THREE.Group();
+            const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshPhongMaterial({color}));
+            cylinder.position.y = 1.5;
+            group.add(cylinder);
+            const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4), new THREE.MeshPhongMaterial({color}));
+            head.position.y = 3;
+            group.add(head);
+            scene.add(group);
+            return group;
+        }
+
+        const u = createVector(0x337ea9);
+        const v = createVector(0xeb5757);
+        const w = createVector(0x9065b0);
+
+        scene.add(new THREE.AmbientLight(0x404040));
+        const light = new THREE.DirectionalLight(0xffffff, 1); light.position.set(5, 5, 5); scene.add(light);
+
+        camera.position.set(5, 5, 8); camera.lookAt(0, 0, 0);
+
+        function update() {
+            const uA = parseFloat(document.getElementById('uAngle').value) * Math.PI / 180;
+            const vA = parseFloat(document.getElementById('vAngle').value) * Math.PI / 180;
+            const wE = parseFloat(document.getElementById('wElev').value) * Math.PI / 180;
+
+            u.rotation.z = -Math.PI/2; u.rotation.y = uA;
+            v.rotation.z = -Math.PI/2; v.rotation.y = vA;
+            w.rotation.z = -Math.PI/2 + wE;
+
+            const status = document.getElementById('status');
+            // Simplified check: if w elevation is ~0, they are coplanar
+            if (Math.abs(wE) < 0.1) {
+                status.textContent = 'Linearly Dependent (Coplanar)';
+                status.className = 'status dependent';
+            } else if (Math.abs(uA - vA) < 0.1 || Math.abs(uA - vA - Math.PI) < 0.1) {
+                status.textContent = 'Linearly Dependent (Collinear)';
+                status.className = 'status dependent';
+            } else {
+                status.textContent = 'Linearly Independent';
+                status.className = 'status independent';
+            }
+        }
+
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        document.querySelectorAll('input').forEach(i => i.addEventListener('input', update));
+        update(); animate();
+    </script>
+</body>
+</html>

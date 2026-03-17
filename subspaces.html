@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation: Subspaces of R³</title>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-hover-sidebar: #EFEFEE;
+            --notion-hover-main: #F1F1EF;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-text-placeholder: #9A9A97;
+            --notion-border: #E9E9E7;
+            --notion-blue: #337EA9;
+            --notion-green: #448361;
+            --notion-orange: #D9730D;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif;
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--notion-bg-sidebar);
+            border: 1px solid var(--notion-border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .prediction-prompt {
+            background: var(--notion-hover-main);
+            border-left: 4px solid var(--notion-green);
+            color: var(--notion-text-primary);
+            font-weight: 500;
+        }
+
+        #view3d {
+            width: 100%;
+            height: 400px;
+            background: white;
+            border: 1px solid var(--notion-border);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .status {
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .valid { background: #E1F0E5; color: #377E47; }
+        .invalid { background: #FDEBEC; color: #EB5757; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card prediction-prompt">
+            💡 <strong>Prediction Prompt:</strong> A plane in R³ is only a <strong>Subspace</strong> if it contains the origin (0, 0, 0). What happens if you shift the plane away from the origin? Will it still be closed under addition?
+        </div>
+
+        <div class="card">
+            <div id="view3d"></div>
+            
+            <div class="stats">
+                <p><strong>Plane Equation:</strong> ax + by + cz = <span id="valD">0</span></p>
+                <p><strong>Status:</strong> <span id="status" class="status valid">Subspace (Contains Origin)</span></p>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Shift (d): <span id="dLabel">0</span></label>
+                    <input type="range" id="dInput" min="-5" max="5" step="0.5" value="0">
+                </div>
+                <div class="control-group">
+                    <label>Tilt (Normal X): <span id="nxLabel">0</span></label>
+                    <input type="range" id="nxInput" min="-1" max="1" step="0.1" value="0">
+                </div>
+                <div class="control-group">
+                    <label>Tilt (Normal Y): <span id="nyLabel">1</span></label>
+                    <input type="range" id="nyInput" min="-1" max="1" step="0.1" value="1">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Three.js from CDN for basic 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const container = document.getElementById('view3d');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Grid and Axes
+        const grid = new THREE.GridHelper(10, 10, 0x37352f, 0xe9e9e7);
+        scene.add(grid);
+
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Plane
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const planeMat = new THREE.MeshPhongMaterial({ 
+            color: 0x337ea9, 
+            side: THREE.DoubleSide, 
+            transparent: true, 
+            opacity: 0.6 
+        });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        scene.add(plane);
+
+        // Lights
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 5, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        camera.position.set(6, 6, 6);
+        camera.lookAt(0, 0, 0);
+
+        const inputs = {
+            d: document.getElementById('dInput'),
+            nx: document.getElementById('nxInput'),
+            ny: document.getElementById('nyInput')
+        };
+
+        const labels = {
+            d: document.getElementById('dLabel'),
+            nx: document.getElementById('nxLabel'),
+            ny: document.getElementById('nyLabel'),
+            valD: document.getElementById('valD'),
+            status: document.getElementById('status')
+        };
+
+        function update() {
+            const d = parseFloat(inputs.d.value);
+            const nx = parseFloat(inputs.nx.value);
+            const ny = parseFloat(inputs.ny.value);
+            const nz = 1.0; // Keep Z normal simple for now
+
+            labels.d.textContent = d;
+            labels.valD.textContent = d;
+            labels.nx.textContent = nx;
+            labels.ny.textContent = ny;
+
+            // Update Plane orientation
+            const normal = new THREE.Vector3(nx, ny, nz).normalize();
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+            plane.quaternion.copy(quaternion);
+            
+            // Move plane by d along the normal
+            const position = normal.clone().multiplyScalar(d);
+            plane.position.copy(position);
+
+            const status = labels.status;
+            if (Math.abs(d) < 0.1) {
+                status.textContent = 'Subspace (Contains Origin)';
+                status.className = 'status valid';
+            } else {
+                status.textContent = 'NOT a Subspace (No Origin)';
+                status.className = 'status invalid';
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        inputs.d.addEventListener('input', update);
+        inputs.nx.addEventListener('input', update);
+        inputs.ny.addEventListener('input', update);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        update();
+        animate();
+    </script>
+</body>
+</html>
