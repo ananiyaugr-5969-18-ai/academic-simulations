@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation: Lines and Planes in R³</title>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-hover-sidebar: #EFEFEE;
+            --notion-hover-main: #F1F1EF;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-border: #E9E9E7;
+            --notion-blue: #337EA9;
+            --notion-red: #EB5757;
+            --notion-orange: #D9730D;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--notion-bg-sidebar);
+            border: 1px solid var(--notion-border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .prediction-prompt {
+            background: var(--notion-hover-main);
+            border-left: 4px solid var(--notion-orange);
+            color: var(--notion-text-primary);
+            font-weight: 500;
+        }
+
+        #view3d {
+            width: 100%;
+            height: 400px;
+            background: white;
+            border: 1px solid var(--notion-border);
+            border-radius: 4px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .stat-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            background: white;
+            border: 1px solid var(--notion-border);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card prediction-prompt">
+            💡 <strong>Prediction Prompt:</strong> How does the <strong>Normal Vector</strong> n = (a, b, c) relate to the orientation of the plane ax + by + cz = d? If you double the normal vector, does the plane rotate or just stay the same?
+        </div>
+
+        <div class="card">
+            <div id="view3d"></div>
+            
+            <div style="margin-top: 15px; display: flex; gap: 20px;">
+                <div><strong>Normal Vector n:</strong> <span id="nVec" class="stat-badge">(0, 1, 0)</span></div>
+                <div><strong>Point on Plane P₀:</strong> <span id="pZero" class="stat-badge">(0, 0, 0)</span></div>
+            </div>
+
+            <div class="controls">
+                <div>
+                    <label>Normal X (a):</label>
+                    <input type="range" id="nx" min="-2" max="2" step="0.1" value="0" style="width:100%">
+                </div>
+                <div>
+                    <label>Normal Y (b):</label>
+                    <input type="range" id="ny" min="-2" max="2" step="0.1" value="1" style="width:100%">
+                </div>
+                <div>
+                    <label>Normal Z (c):</label>
+                    <input type="range" id="nz" min="-2" max="2" step="0.1" value="0" style="width:100%">
+                </div>
+                <div>
+                    <label>Plane Offset (d):</label>
+                    <input type="range" id="d" min="-5" max="5" step="0.5" value="0" style="width:100%">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const container = document.getElementById('view3d');
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        scene.add(new THREE.GridHelper(10, 10, 0x37352f, 0xe9e9e7));
+        scene.add(new THREE.AxesHelper(5));
+
+        // Normal Vector Visual
+        const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 2, 0xd9730d);
+        scene.add(arrowHelper);
+
+        // Plane Visual
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const planeMat = new THREE.MeshPhongMaterial({ color: 0x337ea9, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        scene.add(plane);
+
+        scene.add(new THREE.AmbientLight(0x404040));
+        const light = new THREE.DirectionalLight(0xffffff, 1); light.position.set(5, 5, 5); scene.add(light);
+
+        camera.position.set(7, 7, 7); camera.lookAt(0, 0, 0);
+
+        function update() {
+            const nx = parseFloat(document.getElementById('nx').value);
+            const ny = parseFloat(document.getElementById('ny').value);
+            const nz = parseFloat(document.getElementById('nz').value);
+            const dVal = parseFloat(document.getElementById('d').value);
+
+            const n = new THREE.Vector3(nx, ny, nz);
+            if(n.length() === 0) n.set(0, 1, 0); // Prevention
+
+            document.getElementById('nVec').textContent = `(${nx.toFixed(1)}, ${ny.toFixed(1)}, ${nz.toFixed(1)})`;
+            
+            // Update Arrow
+            arrowHelper.setDirection(n.clone().normalize());
+            arrowHelper.setLength(n.length() > 0 ? n.length() + 0.5 : 1);
+
+            // Update Plane
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), n.clone().normalize());
+            plane.quaternion.copy(quaternion);
+            
+            // Equation is n dot (r - r0) = 0  => n dot r = n dot r0 = d
+            // Position r = (d / |n|^2) * n
+            const pos = n.clone().normalize().multiplyScalar(dVal / n.length());
+            plane.position.copy(pos);
+            arrowHelper.position.copy(pos);
+
+            document.getElementById('pZero').textContent = `(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`;
+        }
+
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        document.querySelectorAll('input').forEach(i => i.addEventListener('input', update));
+        update(); animate();
+    </script>
+</body>
+</html>
