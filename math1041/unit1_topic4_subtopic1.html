@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cross Product in 3D</title>
+<style>
+:root {
+  --notion-bg-main: #FFFFFF;
+  --notion-bg-sidebar: #F7F7F5;
+  --notion-hover-sidebar: #EFEFEE;
+  --notion-hover-main: #F1F1EF;
+  --notion-text-primary: #37352F;
+  --notion-text-secondary: #787774;
+  --notion-text-placeholder: #9A9A97;
+  --notion-border: #E9E9E7;
+}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--notion-bg-main); color: var(--notion-text-primary); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+.container { width: 100%; max-width: 600px; padding: 20px; border: 1px solid var(--notion-border); border-radius: 8px; background: var(--notion-bg-sidebar); }
+.prediction { background: var(--notion-hover-main); padding: 12px; border-radius: 4px; border-left: 4px solid var(--notion-text-placeholder); margin-bottom: 20px; font-size: 14px; }
+canvas { background: var(--notion-bg-main); border: 1px solid var(--notion-border); border-radius: 4px; width: 100%; cursor: move; display: block; }
+.info { margin-top: 15px; padding: 15px; background: var(--notion-bg-main); border-radius: 4px; border: 1px solid var(--notion-border); font-family: monospace; font-size: 14px; }
+input[type=range] { width: 100%; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="prediction">
+    <strong>Prediction Prompt:</strong> Is the Cross Product vector (A × B) always perpendicular to BOTH Vector A and Vector B, regardless of their angle? Drag the canvas to rotate the 3D space.
+  </div>
+  <canvas id="simCanvas" width="560" height="400"></canvas>
+  <div class="controls">
+    <label>Vector A Angle <input type="range" id="angA" min="0" max="360" value="0"></label>
+    <label>Vector B Angle <input type="range" id="angB" min="0" max="360" value="90"></label>
+  </div>
+  <div class="info" id="infoBox">Loading...</div>
+</div>
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width; let height = canvas.height;
+let dpr = window.devicePixelRatio || 1;
+canvas.width = width * dpr; canvas.height = height * dpr;
+ctx.scale(dpr, dpr);
+
+let rotX = 0.5, rotY = -0.6;
+let isDragging = false, lastX, lastY;
+
+const angA_slider = document.getElementById('angA');
+const angB_slider = document.getElementById('angB');
+
+function project(x, y, z) {
+    let cy = Math.cos(rotY), sy = Math.sin(rotY);
+    let x1 = x * cy + z * sy;
+    let z1 = -x * sy + z * cy;
+    
+    let cx = Math.cos(rotX), sx = Math.sin(rotX);
+    let y2 = y * cx - z1 * sx;
+    let z2 = y * sx + z1 * cx;
+    
+    // Scale and center
+    let scale = 100;
+    return { x: x1 * scale + width/2, y: -y2 * scale + height/2, z: z2 };
+}
+
+function drawLine(p1, p2, color, thickness=2) {
+    let pr1 = project(p1.x, p1.y, p1.z);
+    let pr2 = project(p2.x, p2.y, p2.z);
+    ctx.beginPath();
+    ctx.moveTo(pr1.x, pr1.y);
+    ctx.lineTo(pr2.x, pr2.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thickness;
+    ctx.stroke();
+    
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(pr2.x, pr2.y, thickness+1, 0, Math.PI*2);
+    ctx.fill();
+}
+
+function render() {
+    ctx.clearRect(0, 0, width, height);
+    
+    // Axes
+    drawLine({x:0, y:0, z:0}, {x:1.5, y:0, z:0}, 'var(--notion-text-placeholder)', 1);
+    drawLine({x:0, y:0, z:0}, {x:0, y:1.5, z:0}, 'var(--notion-text-placeholder)', 1);
+    drawLine({x:0, y:0, z:0}, {x:0, y:0, z:1.5}, 'var(--notion-text-placeholder)', 1);
+    
+    ctx.fillStyle = 'var(--notion-text-secondary)';
+    let px = project(1.6, 0, 0); ctx.fillText('X', px.x, px.y);
+    let py = project(0, 1.6, 0); ctx.fillText('Y', py.x, py.y);
+    let pz = project(0, 0, 1.6); ctx.fillText('Z', pz.x, pz.y);
+    
+    let aRad = angA_slider.value * Math.PI / 180;
+    let bRad = angB_slider.value * Math.PI / 180;
+    
+    let A = { x: Math.cos(aRad), y: Math.sin(aRad), z: 0 };
+    let B = { x: Math.cos(bRad), y: Math.sin(bRad), z: 0 };
+    
+    // Cross Product (A x B)
+    let Cx = A.y*B.z - A.z*B.y;
+    let Cy = A.z*B.x - A.x*B.z;
+    let Cz = A.x*B.y - A.y*B.x;
+    let C = { x: Cx, y: Cy, z: Cz }; // A x B
+    
+    // Draw Plane Parallelogram
+    let pr0 = project(0,0,0);
+    let prA = project(A.x, A.y, A.z);
+    let prB = project(B.x, B.y, B.z);
+    let prAplusB = project(A.x+B.x, A.y+B.y, A.z+B.z);
+    
+    ctx.beginPath();
+    ctx.moveTo(pr0.x, pr0.y);
+    ctx.lineTo(prA.x, prA.y);
+    ctx.lineTo(prAplusB.x, prAplusB.y);
+    ctx.lineTo(prB.x, prB.y);
+    ctx.fillStyle = 'rgba(237, 242, 247, 0.5)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.8)';
+    ctx.stroke();
+
+    drawLine({x:0,y:0,z:0}, A, '#3182ce', 3);
+    drawLine({x:0,y:0,z:0}, B, '#e53e3e', 3);
+    drawLine({x:0,y:0,z:0}, C, '#38a169', 3);
+    
+    ctx.fillStyle = '#3182ce'; ctx.fillText('A', prA.x+10, prA.y);
+    ctx.fillStyle = '#e53e3e'; ctx.fillText('B', prB.x+10, prB.y);
+    
+    let prC = project(C.x, C.y, C.z);
+    ctx.fillStyle = '#38a169'; ctx.fillText('A × B', prC.x+10, prC.y);
+    
+    document.getElementById('infoBox').innerHTML = 
+        `A = (${A.x.toFixed(2)}, ${A.y.toFixed(2)}, ${A.z.toFixed(2)})<br>` +
+        `B = (${B.x.toFixed(2)}, ${B.y.toFixed(2)}, ${B.z.toFixed(2)})<br>` +
+        `<strong>A × B = (${C.x.toFixed(2)}, ${C.y.toFixed(2)}, ${C.z.toFixed(2)})</strong><br>` +
+        `||A × B|| (Area) = ${Math.hypot(C.x, C.y, C.z).toFixed(2)}`;
+}
+
+canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+document.addEventListener('mouseup', () => isDragging = false);
+document.addEventListener('mousemove', e => {
+    if(!isDragging) return;
+    let dx = e.clientX - lastX;
+    let dy = e.clientY - lastY;
+    rotY += dx * 0.01;
+    rotX += dy * 0.01;
+    lastX = e.clientX; lastY = e.clientY;
+    render();
+});
+angA_slider.addEventListener('input', render);
+angB_slider.addEventListener('input', render);
+
+render();
+</script>
+</body>
+</html>

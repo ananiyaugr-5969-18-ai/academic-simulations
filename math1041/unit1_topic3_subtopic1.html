@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scalar Product</title>
+<style>
+:root {
+  --notion-bg-main: #FFFFFF;
+  --notion-bg-sidebar: #F7F7F5;
+  --notion-hover-sidebar: #EFEFEE;
+  --notion-hover-main: #F1F1EF;
+  --notion-text-primary: #37352F;
+  --notion-text-secondary: #787774;
+  --notion-text-placeholder: #9A9A97;
+  --notion-border: #E9E9E7;
+}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--notion-bg-main); color: var(--notion-text-primary); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+.container { width: 100%; max-width: 600px; padding: 20px; border: 1px solid var(--notion-border); border-radius: 8px; background: var(--notion-bg-sidebar); }
+.prediction { background: var(--notion-hover-main); padding: 12px; border-radius: 4px; border-left: 4px solid var(--notion-text-placeholder); margin-bottom: 20px; font-size: 14px; }
+canvas { background: var(--notion-bg-main); border: 1px solid var(--notion-border); border-radius: 4px; width: 100%; cursor: crosshair; display: block; }
+.info { margin-top: 15px; padding: 15px; background: var(--notion-bg-main); border-radius: 4px; border: 1px solid var(--notion-border); font-family: monospace; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="prediction">
+    <strong>Prediction Prompt:</strong> Before dragging: What will the value of the scalar product (dot product) be when the angle between Vector A and Vector B is exactly 90 degrees?
+  </div>
+  <canvas id="simCanvas" width="560" height="400"></canvas>
+  <div class="info" id="infoBox">Loading...</div>
+</div>
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width;
+let height = canvas.height;
+let dpr = window.devicePixelRatio || 1;
+canvas.width = width * dpr;
+canvas.height = height * dpr;
+ctx.scale(dpr, dpr);
+
+const origin = { x: width/2, y: height/2 };
+let A = { x: 100, y: -40 };
+let B = { x: 80, y: 80 };
+let dragging = null;
+
+function drawArrow(toX, toY, color, label) {
+    ctx.beginPath();
+    ctx.moveTo(origin.x, origin.y);
+    const endX = origin.x + toX;
+    const endY = origin.y + toY;
+    ctx.lineTo(endX, endY);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // arrowhead
+    const angle = Math.atan2(toY, toX);
+    ctx.beginPath();
+    ctx.moveTo(endX, endY);
+    ctx.lineTo(endX - 10 * Math.cos(angle - Math.PI / 6), endY - 10 * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(endX - 10 * Math.cos(angle + Math.PI / 6), endY - 10 * Math.sin(angle + Math.PI / 6));
+    ctx.lineTo(endX, endY);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.font = 'bold 14px Arial';
+    ctx.fillText(label, endX + 10, endY + 10);
+}
+
+function drawGrid() {
+    ctx.clearRect(0, 0, width, height);
+    ctx.strokeStyle = 'var(--notion-border)';
+    ctx.lineWidth = 1;
+    for(let i=0; i<width; i+=20) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,height); ctx.stroke(); }
+    for(let i=0; i<height; i+=20) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(width,i); ctx.stroke(); }
+    ctx.strokeStyle = 'var(--notion-text-placeholder)';
+    ctx.beginPath(); ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, origin.y); ctx.lineTo(width, origin.y); ctx.stroke();
+}
+
+function render() {
+    drawGrid();
+    
+    // Calculate dot product
+    let dot = (A.x/20)*(B.x/20) + (A.y/20)*(B.y/20);
+    
+    // Calculate Projection of A onto B
+    let bSq = (B.x/20)*(B.x/20) + (B.y/20)*(B.y/20);
+    let projScale = dot / bSq;
+    let proj = { x: B.x * projScale, y: B.y * projScale };
+    
+    // Draw projection shadow
+    ctx.beginPath();
+    ctx.moveTo(origin.x + A.x, origin.y + A.y);
+    ctx.lineTo(origin.x + proj.x, origin.y + proj.y);
+    ctx.strokeStyle = 'var(--notion-text-placeholder)';
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    drawArrow(proj.x, proj.y, '#38a169', 'Proj');
+    drawArrow(A.x, A.y, '#319795', 'A');
+    drawArrow(B.x, B.y, '#d53f8c', 'B');
+    
+    // Handles
+    ctx.fillStyle = '#319795'; ctx.beginPath(); ctx.arc(origin.x+A.x, origin.y+A.y, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#d53f8c'; ctx.beginPath(); ctx.arc(origin.x+B.x, origin.y+B.y, 6, 0, Math.PI*2); ctx.fill();
+    
+    let aLen = Math.hypot(A.x, A.y)/20;
+    let bLen = Math.hypot(B.x, B.y)/20;
+    let cosTheta = dot / (aLen * bLen);
+    let angle = Math.acos(cosTheta) * (180/Math.PI);
+    
+    document.getElementById('infoBox').innerHTML = 
+        `A = (${(A.x/20).toFixed(1)}, ${(-A.y/20).toFixed(1)})<br>` +
+        `B = (${(B.x/20).toFixed(1)}, ${(-B.y/20).toFixed(1)})<br>` +
+        `<strong>A · B = ${dot.toFixed(2)}</strong><br>` +
+        `Angle: ${angle.toFixed(1)}°`;
+}
+
+canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width / dpr) - origin.x;
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height / dpr) - origin.y;
+    if (Math.hypot(mx - A.x, my - A.y) < 20) dragging = 'A';
+    else if (Math.hypot(mx - B.x, my - B.y) < 20) dragging = 'B';
+});
+canvas.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width / dpr) - origin.x;
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height / dpr) - origin.y;
+    if(dragging === 'A') { A.x = mx; A.y = my; }
+    else if(dragging === 'B') { B.x = mx; B.y = my; }
+    render();
+});
+canvas.addEventListener('mouseup', () => dragging = null);
+canvas.addEventListener('mouseleave', () => dragging = null);
+render();
+</script>
+</body>
+</html>
