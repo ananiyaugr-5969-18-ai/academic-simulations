@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parallelepiped Volume</title>
+<style>
+:root {
+  --notion-bg-main: #FFFFFF;    --notion-bg-sidebar: #F7F7F5;
+  --notion-hover-sidebar: #EFEFEE; --notion-hover-main: #F1F1EF;
+  --notion-text-primary: #37352F;  --notion-text-secondary: #787774;
+  --notion-text-placeholder: #9A9A97; --notion-border: #E9E9E7;
+}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--notion-bg-main); color: var(--notion-text-primary); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+.container { width: 100%; max-width: 600px; padding: 20px; border: 1px solid var(--notion-border); border-radius: 8px; background: var(--notion-bg-sidebar); }
+.prediction { background: var(--notion-hover-main); padding: 12px; border-radius: 4px; border-left: 4px solid var(--notion-text-placeholder); margin-bottom: 20px; font-size: 14px; }
+canvas { background: var(--notion-bg-main); border: 1px solid var(--notion-border); border-radius: 4px; width: 100%; cursor: move; display: block; }
+.controls { margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.info { margin-top: 10px; padding: 15px; background: var(--notion-bg-main); border-radius: 4px; border: 1px solid var(--notion-border); font-family: monospace; font-size: 14px; }
+input[type=range] { width: 100%; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="prediction">
+    <strong>Prediction Prompt:</strong> The volume is given by |A · (B × C)|. If Vector C is pushed down to lie perfectly flat on the same plane as Vectors A and B, what happens to the volume?
+  </div>
+  <canvas id="simCanvas" width="560" height="400"></canvas>
+  <div class="controls">
+    <label>Vector C Height (y): <input type="range" id="cy" min="-1.5" max="1.5" step="0.1" value="1.0"></label>
+  </div>
+  <div class="info" id="infoBox">Loading...</div>
+</div>
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width; let height = canvas.height;
+let dpr = window.devicePixelRatio || 1;
+canvas.width = width * dpr; canvas.height = height * dpr;
+ctx.scale(dpr, dpr);
+
+let rotX = 0.5, rotY = -0.5;
+let isDragging = false, lastX, lastY;
+const cySlider = document.getElementById('cy');
+
+function project(x, y, z) {
+    let cy_r = Math.cos(rotY), sy_r = Math.sin(rotY);
+    let x1 = x * cy_r + z * sy_r;
+    let z1 = -x * sy_r + z * cy_r;
+    let cx = Math.cos(rotX), sx = Math.sin(rotX);
+    let y2 = y * cx - z1 * sx;
+    let z2 = y * sx + z1 * cx;
+    let scale = 100;
+    return { x: x1 * scale + width/2, y: -y2 * scale + height/2 + 50, z: z2 };
+}
+
+function drawLine(p1, p2, color, thickness=2, arrow=false) {
+    let pr1 = project(p1.x, p1.y, p1.z);
+    let pr2 = project(p2.x, p2.y, p2.z);
+    ctx.beginPath(); ctx.moveTo(pr1.x, pr1.y); ctx.lineTo(pr2.x, pr2.y);
+    ctx.strokeStyle = color; ctx.lineWidth = thickness; ctx.stroke();
+    if(arrow) {
+        let angle = Math.atan2(pr2.y - pr1.y, pr2.x - pr1.x);
+        ctx.beginPath();
+        ctx.moveTo(pr2.x, pr2.y);
+        ctx.lineTo(pr2.x - 10 * Math.cos(angle - Math.PI / 6), pr2.y - 10 * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(pr2.x - 10 * Math.cos(angle + Math.PI / 6), pr2.y - 10 * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(pr2.x, pr2.y);
+        ctx.fillStyle = color; ctx.fill();
+    }
+}
+
+function render() {
+    ctx.clearRect(0, 0, width, height);
+    
+    drawLine({x:0,y:0,z:0}, {x:2,y:0,z:0}, '#cbd5e0', 1);
+    drawLine({x:0,y:0,z:0}, {x:0,y:2,z:0}, '#cbd5e0', 1);
+    drawLine({x:0,y:0,z:0}, {x:0,y:0,z:2}, '#cbd5e0', 1);
+    
+    let A = { x: 1.0, y: 0, z: -0.5 };
+    let B = { x: 0.5, y: 0, z: 1.0 };
+    let C = { x: 0.2, y: parseFloat(cySlider.value), z: 0.3 };
+    
+    let AB = { x: A.x + B.x, y: A.y + B.y, z: A.z + B.z }; // base point
+    
+    // Draw edges
+    ctx.setLineDash([5,5]);
+    ctx.strokeStyle = 'var(--notion-border)';
+    
+    // Base lines
+    drawLine(A, {x:A.x+B.x, y:A.y+B.y, z:A.z+B.z}, 'var(--notion-border)', 1);
+    drawLine(B, {x:A.x+B.x, y:A.y+B.y, z:A.z+B.z}, 'var(--notion-border)', 1);
+    
+    // Top face
+    let A_t = {x: A.x+C.x, y: A.y+C.y, z: A.z+C.z};
+    let B_t = {x: B.x+C.x, y: B.y+C.y, z: B.z+C.z};
+    let AB_t = {x: AB.x+C.x, y: AB.y+C.y, z: AB.z+C.z};
+    
+    drawLine(C, A_t, 'var(--notion-text-placeholder)', 1);
+    drawLine(C, B_t, 'var(--notion-text-placeholder)', 1);
+    drawLine(A_t, AB_t, 'var(--notion-text-placeholder)', 1);
+    drawLine(B_t, AB_t, 'var(--notion-text-placeholder)', 1);
+    
+    // Vertical edges
+    drawLine(A, A_t, 'var(--notion-text-placeholder)', 1);
+    drawLine(B, B_t, 'var(--notion-text-placeholder)', 1);
+    drawLine(AB, AB_t, 'var(--notion-text-placeholder)', 1);
+    
+    ctx.setLineDash([]);
+    
+    drawLine({x:0,y:0,z:0}, A, '#3182ce', 3, true);
+    drawLine({x:0,y:0,z:0}, B, '#e53e3e', 3, true);
+    drawLine({x:0,y:0,z:0}, C, '#38a169', 3, true);
+    
+    // Calculate Triple Scalar Product
+    let cross_x = B.y*C.z - B.z*C.y;
+    let cross_y = B.z*C.x - B.x*C.z;
+    let cross_z = B.x*C.y - B.y*C.x;
+    let triple = A.x*cross_x + A.y*cross_y + A.z*cross_z;
+    let volume = Math.abs(triple);
+    
+    document.getElementById('infoBox').innerHTML = 
+        `A = (${A.x.toFixed(1)}, ${A.y.toFixed(1)}, ${A.z.toFixed(1)})<br>` +
+        `B = (${B.x.toFixed(1)}, ${B.y.toFixed(1)}, ${B.z.toFixed(1)})<br>` +
+        `C = (${C.x.toFixed(1)}, ${C.y.toFixed(1)}, ${C.z.toFixed(1)})<br>` +
+        `<strong>Volume = |A · (B × C)| = ${volume.toFixed(2)} cubic units</strong>`;
+}
+
+canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+document.addEventListener('mouseup', () => isDragging = false);
+document.addEventListener('mousemove', e => {
+    if(!isDragging) return;
+    let dx = e.clientX - lastX;
+    let dy = e.clientY - lastY;
+    rotY += dx * 0.01; rotX += dy * 0.01;
+    lastX = e.clientX; lastY = e.clientY;
+    render();
+});
+cySlider.addEventListener('input', render);
+render();
+</script>
+</body>
+</html>

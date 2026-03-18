@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planes in 3D</title>
+<style>
+:root {
+  --notion-bg-main: #FFFFFF;    --notion-bg-sidebar: #F7F7F5;
+  --notion-hover-sidebar: #EFEFEE; --notion-hover-main: #F1F1EF;
+  --notion-text-primary: #37352F;  --notion-text-secondary: #787774;
+  --notion-text-placeholder: #9A9A97; --notion-border: #E9E9E7;
+}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--notion-bg-main); color: var(--notion-text-primary); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+.container { width: 100%; max-width: 600px; padding: 20px; border: 1px solid var(--notion-border); border-radius: 8px; background: var(--notion-bg-sidebar); }
+.prediction { background: var(--notion-hover-main); padding: 12px; border-radius: 4px; border-left: 4px solid var(--notion-text-placeholder); margin-bottom: 20px; font-size: 14px; }
+canvas { background: var(--notion-bg-main); border: 1px solid var(--notion-border); border-radius: 4px; width: 100%; cursor: move; display: block; }
+.info { margin-top: 15px; padding: 15px; background: var(--notion-bg-main); border-radius: 4px; border: 1px solid var(--notion-border); font-family: monospace; font-size: 14px; }
+input[type=range] { width: 100%; }
+.controls { margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="prediction">
+    <strong>Prediction Prompt:</strong> A plane is defined by a point Q and a normal vector N. How does the orientation of the plane change when you tilt the Normal Vector N?
+  </div>
+  <canvas id="simCanvas" width="560" height="400"></canvas>
+  <div class="controls">
+    <label>Normal Vector X: <input type="range" id="nx" min="-2" max="2" step="0.1" value="0.5"></label>
+    <label>Normal Vector Z: <input type="range" id="nz" min="-2" max="2" step="0.1" value="1.5"></label>
+  </div>
+  <div class="info" id="infoBox">Loading...</div>
+</div>
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width; let height = canvas.height;
+let dpr = window.devicePixelRatio || 1;
+canvas.width = width * dpr; canvas.height = height * dpr;
+ctx.scale(dpr, dpr);
+
+let rotX = 0.5, rotY = -0.5;
+let isDragging = false, lastX, lastY;
+
+const nxSlider = document.getElementById('nx');
+const nzSlider = document.getElementById('nz');
+
+function project(x, y, z) {
+    let cy = Math.cos(rotY), sy = Math.sin(rotY);
+    let x1 = x * cy + z * sy;
+    let z1 = -x * sy + z * cy;
+    let cx = Math.cos(rotX), sx = Math.sin(rotX);
+    let y2 = y * cx - z1 * sx;
+    let z2 = y * sx + z1 * cx;
+    let scale = 70;
+    return { x: x1 * scale + width/2, y: -y2 * scale + height/2, z: z2 };
+}
+
+function drawLine(p1, p2, color, thickness=2, arrow=false) {
+    let pr1 = project(p1.x, p1.y, p1.z);
+    let pr2 = project(p2.x, p2.y, p2.z);
+    ctx.beginPath(); ctx.moveTo(pr1.x, pr1.y); ctx.lineTo(pr2.x, pr2.y);
+    ctx.strokeStyle = color; ctx.lineWidth = thickness; ctx.stroke();
+    if(arrow) {
+        let angle = Math.atan2(pr2.y - pr1.y, pr2.x - pr1.x);
+        ctx.beginPath();
+        ctx.moveTo(pr2.x, pr2.y);
+        ctx.lineTo(pr2.x - 10 * Math.cos(angle - Math.PI / 6), pr2.y - 10 * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(pr2.x - 10 * Math.cos(angle + Math.PI / 6), pr2.y - 10 * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(pr2.x, pr2.y);
+        ctx.fillStyle = color; ctx.fill();
+    }
+}
+
+function render() {
+    ctx.clearRect(0, 0, width, height);
+    
+    drawLine({x:-2, y:0, z:0}, {x:2, y:0, z:0}, 'var(--notion-text-placeholder)', 1);
+    drawLine({x:0, y:-2, z:0}, {x:0, y:2, z:0}, 'var(--notion-text-placeholder)', 1);
+    drawLine({x:0, y:0, z:-2}, {x:0, y:0, z:2}, 'var(--notion-text-placeholder)', 1);
+    
+    let Q = { x: 0, y: 0.5, z: 0 }; // Point on plane
+    let N = { x: parseFloat(nxSlider.value), y: 1.0, z: parseFloat(nzSlider.value) };
+    
+    // Find two orthogonal vectors on the plane to draw a square
+    // If N is mostly Y, use X; else use Y.
+    let U, V;
+    if (Math.abs(N.y) > 0.5) {
+        U = { x: 1, y: -N.x/N.y, z: 0 };
+    } else {
+        U = { x: -N.y/N.x, y: 1, z: 0 };
+    }
+    // Normalize U
+    let uLen = Math.hypot(U.x, U.y, U.z);
+    U.x /= uLen; U.y /= uLen; U.z /= uLen;
+    // Cross product to find V
+    V = { x: N.y*U.z - N.z*U.y, y: N.z*U.x - N.x*U.z, z: N.x*U.y - N.y*U.x };
+    // Normalize V
+    let vLen = Math.hypot(V.x, V.y, V.z);
+    V.x /= vLen; V.y /= vLen; V.z /= vLen;
+    
+    let size = 2.0;
+    let p1 = { x: Q.x + size*U.x + size*V.x, y: Q.y + size*U.y + size*V.y, z: Q.z + size*U.z + size*V.z };
+    let p2 = { x: Q.x - size*U.x + size*V.x, y: Q.y - size*U.y + size*V.y, z: Q.z - size*U.z + size*V.z };
+    let p3 = { x: Q.x - size*U.x - size*V.x, y: Q.y - size*U.y - size*V.y, z: Q.z - size*U.z - size*V.z };
+    let p4 = { x: Q.x + size*U.x - size*V.x, y: Q.y + size*U.y - size*V.y, z: Q.z + size*U.z - size*V.z };
+    
+    let prp1 = project(p1.x, p1.y, p1.z);
+    let prp2 = project(p2.x, p2.y, p2.z);
+    let prp3 = project(p3.x, p3.y, p3.z);
+    let prp4 = project(p4.x, p4.y, p4.z);
+    
+    ctx.beginPath();
+    ctx.moveTo(prp1.x, prp1.y); ctx.lineTo(prp2.x, prp2.y); ctx.lineTo(prp3.x, prp3.y); ctx.lineTo(prp4.x, prp4.y);
+    ctx.fillStyle = 'rgba(66, 153, 225, 0.2)';
+    ctx.fill();
+    ctx.strokeStyle = '#3182ce'; ctx.lineWidth = 1; ctx.stroke();
+    
+    drawLine({x:0, y:0, z:0}, Q, '#38a169', 3, true);
+    drawLine(Q, {x: Q.x + N.x, y: Q.y + N.y, z: Q.z + N.z}, '#e53e3e', 3, true);
+    
+    let prQ = project(Q.x, Q.y, Q.z);
+    ctx.fillStyle = '#38a169'; ctx.font="14px Arial"; ctx.fillText('Q', prQ.x+10, prQ.y);
+    
+    document.getElementById('infoBox').innerHTML = 
+        `Point Q = (${Q.x.toFixed(1)}, ${Q.y.toFixed(1)}, ${Q.z.toFixed(1)})<br>` +
+        `Normal N = (${N.x.toFixed(1)}, ${N.y.toFixed(1)}, ${N.z.toFixed(1)})<br>` +
+        `<strong>Plane Eq: ${N.x.toFixed(1)}(x - ${Q.x}) + ${N.y.toFixed(1)}(y - ${Q.y}) + ${N.z.toFixed(1)}(z - ${Q.z}) = 0</strong>`;
+}
+
+canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+document.addEventListener('mouseup', () => isDragging = false);
+document.addEventListener('mousemove', e => {
+    if(!isDragging) return;
+    let dx = e.clientX - lastX;
+    let dy = e.clientY - lastY;
+    rotY += dx * 0.01; rotX += dy * 0.01;
+    lastX = e.clientX; lastY = e.clientY;
+    render();
+});
+nxSlider.addEventListener('input', render); nzSlider.addEventListener('input', render);
+render();
+</script>
+</body>
+</html>
