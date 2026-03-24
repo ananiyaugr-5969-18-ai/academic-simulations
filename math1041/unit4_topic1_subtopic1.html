@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Space Axioms - Interactive Visualization</title>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-hover-sidebar: #EFEFEE;
+            --notion-hover-main: #F1F1EF;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-text-placeholder: #9A9A97;
+            --notion-border: #E9E9E7;
+            --error-red: #EB5757;
+            --success-green: #27AE60;
+            --vector-u: #2F80ED;
+            --vector-v: #F2994A;
+            --vector-sum: #9B51E0;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .prediction-prompt {
+            background-color: var(--notion-bg-sidebar);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--notion-border);
+            margin-bottom: 20px;
+            font-style: italic;
+            color: var(--notion-text-secondary);
+            width: 100%;
+            text-align: center;
+        }
+
+        .simulation-area {
+            display: flex;
+            gap: 40px;
+            width: 100%;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        canvas {
+            border: 1px solid var(--notion-border);
+            border-radius: 8px;
+            background-color: white;
+            cursor: crosshair;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .controls {
+            flex: 1;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background-color: var(--notion-bg-sidebar);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--notion-border);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--notion-text-secondary);
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+        }
+
+        .status-box {
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            text-align: center;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .status-neutral { background-color: var(--notion-hover-sidebar); color: var(--notion-text-secondary); }
+        .status-error { background-color: #FDECEC; color: var(--error-red); border: 1px solid var(--error-red); }
+        .status-success { background-color: #EBF7EE; color: var(--success-green); border: 1px solid var(--success-green); }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        .tooltip {
+            font-size: 0.8em;
+            color: var(--notion-text-secondary);
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Vector Space Axioms</h1>
+        <p>Testing Closure Properties in $\mathbb{R}^2$</p>
+    </div>
+
+    <div class="prediction-prompt">
+        "Before moving the slider or selecting a set: What do you predict will happen to the closure of the set if we change the scalar to a negative value or select a non-origin containing set?"
+    </div>
+
+    <div class="simulation-area">
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <canvas id="vectorCanvas" width="400" height="400"></canvas>
+            <div class="legend">
+                <div class="legend-item"><span class="dot" style="background-color: var(--vector-u);"></span> Vector $\vec{u}$</div>
+                <div class="legend-item"><span class="dot" style="background-color: var(--vector-v);"></span> Vector $\vec{v}$</div>
+                <div class="legend-item"><span class="dot" style="background-color: var(--vector-sum);"></span> $\vec{u} + c\vec{v}$</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="setSelect">Select Subset of $\mathbb{R}^2$</label>
+                <select id="setSelect">
+                    <option value="all">Entire $\mathbb{R}^2$ (Passes)</option>
+                    <option value="quad1">1st Quadrant ($x \ge 0, y \ge 0$)</option>
+                    <option value="lineOrigin">Line through Origin ($y = x$)</option>
+                    <option value="lineNoOrigin">Line NOT through Origin ($y = 1$)</option>
+                    <option value="integers">Integer Grid (Lattice)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="scalarRange">Scalar $c$: <span id="scalarVal">1.0</span></label>
+                <input type="range" id="scalarRange" min="-2" max="2" step="0.1" value="1">
+            </div>
+
+            <div id="statusBox" class="status-box status-success">
+                Set is currently CLOSED
+            </div>
+
+            <div class="tooltip">
+                <strong>How to use:</strong><br>
+                1. Click and drag $\vec{u}$ (Blue) or $\vec{v}$ (Orange) on the canvas.<br>
+                2. Adjust scalar $c$ to see $c\vec{v}$.<br>
+                3. The Purple vector is $\vec{u} + c\vec{v}$.<br>
+                4. If the Purple vector tip leaves the shaded region, the axiom of closure is violated.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('vectorCanvas');
+    const ctx = canvas.getContext('2d');
+    const setSelect = document.getElementById('setSelect');
+    const scalarRange = document.getElementById('scalarRange');
+    const scalarVal = document.getElementById('scalarVal');
+    const statusBox = document.getElementById('statusBox');
+
+    let u = { x: 50, y: 50 };
+    let v = { x: 60, y: -20 };
+    let c = 1.0;
+    let dragging = null;
+
+    const scale = 20;
+    const origin = { x: canvas.width / 2, y: canvas.height / 2 };
+
+    function toCanvas(coords) {
+        return {
+            x: origin.x + coords.x * scale,
+            y: origin.y - coords.y * scale
+        };
+    }
+
+    function fromCanvas(coords) {
+        return {
+            x: (coords.x - origin.x) / scale,
+            y: (origin.y - coords.y) / scale
+        };
+    }
+
+    function isInSet(point) {
+        const set = setSelect.value;
+        const eps = 0.05;
+        switch(set) {
+            case 'all': return true;
+            case 'quad1': return point.x >= -eps && point.y >= -eps;
+            case 'lineOrigin': return Math.abs(point.y - point.x) < eps;
+            case 'lineNoOrigin': return Math.abs(point.y - 1) < eps;
+            case 'integers': return Math.abs(point.x - Math.round(point.x)) < eps && Math.abs(point.y - Math.round(point.y)) < eps;
+            default: return true;
+        }
+    }
+
+    function drawGrid() {
+        ctx.strokeStyle = '#E9E9E7';
+        ctx.lineWidth = 1;
+        for (let i = -10; i <= 10; i++) {
+            const p1 = toCanvas({ x: i, y: -10 });
+            const p2 = toCanvas({ x: i, y: 10 });
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+
+            const p3 = toCanvas({ x: -10, y: i });
+            const p4 = toCanvas({ x: 10, y: i });
+            ctx.beginPath();
+            ctx.moveTo(p3.x, p3.y);
+            ctx.lineTo(p4.x, p4.y);
+            ctx.stroke();
+        }
+
+        ctx.strokeStyle = '#37352F';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, origin.y); ctx.lineTo(canvas.width, origin.y);
+        ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, canvas.height);
+        ctx.stroke();
+    }
+
+    function drawSet() {
+        const set = setSelect.value;
+        ctx.fillStyle = 'rgba(235, 87, 87, 0.05)';
+        if (set === 'all') {
+            ctx.fillStyle = 'rgba(39, 174, 96, 0.05)';
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+        } else if (set === 'quad1') {
+            ctx.fillRect(origin.x, 0, origin.x, origin.y);
+        } else if (set === 'lineOrigin') {
+            ctx.strokeStyle = 'rgba(78, 77, 74, 0.2)';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height); ctx.lineTo(canvas.width, 0);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        } else if (set === 'lineNoOrigin') {
+            ctx.strokeStyle = 'rgba(78, 77, 74, 0.2)';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            const y = origin.y - 1 * scale;
+            ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        } else if (set === 'integers') {
+            ctx.fillStyle = 'rgba(78, 77, 74, 0.3)';
+            for(let i=-10; i<=10; i++) {
+                for(let j=-10; j<=10; j++) {
+                    const p = toCanvas({x:i, y:j});
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        }
+    }
+
+    function drawVector(vec, color, label, isSum = false) {
+        const end = toCanvas(vec);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+
+        // Arrowhead
+        const angle = Math.atan2(end.y - origin.y, end.x - origin.x);
+        ctx.beginPath();
+        ctx.moveTo(end.x, end.y);
+        ctx.lineTo(end.x - 10 * Math.cos(angle - Math.PI / 6), end.y - 10 * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(end.x - 10 * Math.cos(angle + Math.PI / 6), end.y - 10 * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.font = 'bold 14px Inter, sans-serif';
+        ctx.fillText(label, end.x + 5, end.y - 5);
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        drawSet();
+
+        const cv = { x: v.x * c, y: v.y * c };
+        const sum = { x: u.x + cv.x, y: u.y + cv.y };
+
+        drawVector(u, '#2F80ED', 'u');
+        drawVector(cv, '#F2994A', 'cv');
+        drawVector(sum, '#9B51E0', 'u + cv', true);
+
+        const closed = isInSet(sum);
+        if (closed) {
+            statusBox.textContent = 'Axiom of Closure: SATISFIED';
+            statusBox.className = 'status-box status-success';
+        } else {
+            statusBox.textContent = 'Axiom of Closure: VIOLATED';
+            statusBox.className = 'status-box status-error';
+        }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouse = fromCanvas({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        
+        const distU = Math.hypot(u.x - mouse.x, u.y - mouse.y);
+        const distV = Math.hypot(v.x - mouse.x, v.y - mouse.y);
+        
+        if (distU < 1) dragging = 'u';
+        else if (distV < 1) dragging = 'v';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const rect = canvas.getBoundingClientRect();
+        const mouse = fromCanvas({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        if (dragging === 'u') u = mouse;
+        if (dragging === 'v') v = mouse;
+        render();
+    });
+
+    window.addEventListener('mouseup', () => { dragging = null; });
+
+    setSelect.addEventListener('change', render);
+    scalarRange.addEventListener('input', (e) => {
+        c = parseFloat(e.target.value);
+        scalarVal.textContent = c.toFixed(1);
+        render();
+    });
+
+    render();
+</script>
+</body>
+</html>

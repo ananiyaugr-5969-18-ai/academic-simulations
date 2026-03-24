@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subspaces & Span - 3D Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-border: #E9E9E7;
+            --vector-1: #2F80ED;
+            --vector-2: #F2994A;
+            --vector-3: #9B51E0;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, sans-serif;
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .prediction-prompt {
+            background-color: var(--notion-bg-sidebar);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--notion-border);
+            font-style: italic;
+            color: var(--notion-text-secondary);
+            width: 100%;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .simulation-area {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            height: 500px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--notion-border);
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        #canvas-container {
+            flex: 2;
+            position: relative;
+            background: #fafafa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background-color: var(--notion-bg-sidebar);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-weight: 600;
+            color: var(--notion-text-secondary);
+        }
+
+        input[type="range"] { width: 100%; }
+
+        .status-badge {
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .in-span { background: #EBF7EE; color: #27AE60; }
+        .out-span { background: #FDECEC; color: #EB5757; }
+
+        h1 { margin: 0; font-size: 1.5em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="text-align: center;">
+        <h1>Subspaces and Span</h1>
+        <p style="color: var(--notion-text-secondary); margin: 5px 0;">Visualizing $Span\{v_1, v_2\}$ in $\mathbb{R}^3$</p>
+    </div>
+
+    <div class="prediction-prompt">
+        "Before moving the vector: If you change the third vector's Z-coordinate, do you predict it will still lie in the span of $v_1$ and $v_2$?"
+    </div>
+
+    <div class="simulation-area">
+        <div id="canvas-container"></div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Vector $v_1$ ($X, Y, Z$)</label>
+                <input type="range" id="v1x" min="-5" max="5" step="0.5" value="3">
+                <input type="range" id="v1y" min="-5" max="5" step="0.5" value="0">
+                <input type="range" id="v1z" min="-5" max="5" step="0.5" value="1">
+            </div>
+
+            <div class="control-group">
+                <label>Vector $v_2$ ($X, Y, Z$)</label>
+                <input type="range" id="v2x" min="-5" max="5" step="0.5" value="0">
+                <input type="range" id="v2y" min="-5" max="5" step="0.5" value="3">
+                <input type="range" id="v2z" min="-5" max="5" step="0.5" value="1">
+            </div>
+
+            <hr style="border: 0.5px solid var(--notion-border); width: 100%;">
+
+            <div class="control-group">
+                <label>Test Vector $w$ ($X, Y, Z$)</label>
+                <input type="range" id="wx" min="-5" max="5" step="0.5" value="3">
+                <input type="range" id="wy" min="-5" max="5" step="0.5" value="3">
+                <input type="range" id="wz" min="-5" max="5" step="0.5" value="2">
+            </div>
+
+            <div id="spanStatus" class="status-badge in-span">
+                $w \in Span\{v_1, v_2\}$
+            </div>
+
+            <p style="font-size: 0.8em; color: var(--notion-text-secondary);">
+                <strong>Note:</strong> The semi-transparent plane represents all possible linear combinations $c_1 v_1 + c_2 v_2$.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let scene, camera, renderer, plane, v1Arrow, v2Arrow, wArrow;
+    let container = document.getElementById('canvas-container');
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xfafafa);
+
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(10, 8, 10);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // Grid & Axes
+        const gridHelper = new THREE.GridHelper(10, 10, 0xcccccc, 0xeeeeee);
+        scene.add(gridHelper);
+        const axesHelper = new THREE.AxesHelper(6);
+        scene.add(axesHelper);
+
+        // Plane for Span
+        const planeGeometry = new THREE.PlaneGeometry(20, 20);
+        const planeMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x2F80ED, 
+            side: THREE.DoubleSide, 
+            transparent: true, 
+            opacity: 0.15 
+        });
+        plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        scene.add(plane);
+
+        updateVisuals();
+        animate();
+    }
+
+    function createArrow(dir, origin, length, color) {
+        return new THREE.ArrowHelper(dir.clone().normalize(), origin, dir.length(), color, 0.4, 0.2);
+    }
+
+    function updateVisuals() {
+        const v1 = new THREE.Vector3(
+            parseFloat(document.getElementById('v1x').value),
+            parseFloat(document.getElementById('v1z').value), // Swap Y/Z for coordinate system
+            parseFloat(document.getElementById('v1y').value)
+        );
+        const v2 = new THREE.Vector3(
+            parseFloat(document.getElementById('v2x').value),
+            parseFloat(document.getElementById('v2z').value),
+            parseFloat(document.getElementById('v2y').value)
+        );
+        const w = new THREE.Vector3(
+            parseFloat(document.getElementById('wx').value),
+            parseFloat(document.getElementById('wz').value),
+            parseFloat(document.getElementById('wy').value)
+        );
+
+        if(v1Arrow) scene.remove(v1Arrow);
+        if(v2Arrow) scene.remove(v2Arrow);
+        if(wArrow) scene.remove(wArrow);
+
+        v1Arrow = createArrow(v1, new THREE.Vector3(0,0,0), v1.length(), 0x2F80ED);
+        v2Arrow = createArrow(v2, new THREE.Vector3(0,0,0), v2.length(), 0xF2994A);
+        wArrow = createArrow(w, new THREE.Vector3(0,0,0), w.length(), 0x9B51E0);
+
+        scene.add(v1Arrow);
+        scene.add(v2Arrow);
+        scene.add(wArrow);
+
+        // Update Plane orientation
+        const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+        plane.lookAt(normal);
+
+        // Check if w is in span (Calculate distance to plane)
+        const dist = Math.abs(w.dot(normal));
+        const status = document.getElementById('spanStatus');
+        if (dist < 0.1) {
+            status.textContent = 'w \u2208 Span{v1, v2}';
+            status.className = 'status-badge in-span';
+        } else {
+            status.textContent = 'w \u2209 Span{v1, v2}';
+            status.className = 'status-badge out-span';
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        scene.rotation.y += 0.002; // Auto-rotate for context
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    ['v1x','v1y','v1z','v2x','v2y','v2z','wx','wy','wz'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateVisuals);
+    });
+
+    init();
+</script>
+</body>
+</html>

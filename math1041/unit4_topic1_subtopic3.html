@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linear Dependence - 3D Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --notion-bg-main: #FFFFFF;
+            --notion-bg-sidebar: #F7F7F5;
+            --notion-text-primary: #37352F;
+            --notion-text-secondary: #787774;
+            --notion-border: #E9E9E7;
+            --ind-blue: #2F80ED;
+            --dep-red: #EB5757;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, sans-serif;
+            background-color: var(--notion-bg-main);
+            color: var(--notion-text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .prediction-prompt {
+            background-color: var(--notion-bg-sidebar);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--notion-border);
+            font-style: italic;
+            color: var(--notion-text-secondary);
+            width: 100%;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .simulation-area {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            height: 500px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--notion-border);
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        #canvas-container {
+            flex: 2;
+            position: relative;
+            background: #fafafa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background-color: var(--notion-bg-sidebar);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        label {
+            font-weight: 600;
+            color: var(--notion-text-secondary);
+            margin-top: 5px;
+        }
+
+        input[type="range"] { width: 100%; }
+
+        .status-badge {
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .independent { background: #EBF7EE; color: #27AE60; border: 2px solid #27AE60; }
+        .dependent { background: #FDECEC; color: #EB5757; border: 2px solid #EB5757; }
+
+        h1 { margin: 0; font-size: 1.5em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="text-align: center;">
+        <h1>Linear Dependence</h1>
+        <p style="color: var(--notion-text-secondary); margin: 5px 0;">Determinant & Coplanarity Test</p>
+    </div>
+
+    <div class="prediction-prompt">
+        "Before moving the sliders: If $v_3 = v_1 + v_2$, what do you predict the determinant will be? Will the vectors be coplanar?"
+    </div>
+
+    <div class="simulation-area">
+        <div id="canvas-container"></div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label style="color: #2F80ED">Vector $v_1$ ($X, Y, Z$)</label>
+                <input type="range" id="v1x" min="-4" max="4" step="0.5" value="3">
+                <input type="range" id="v1y" min="-4" max="4" step="0.5" value="0">
+                <input type="range" id="v1z" min="-4" max="4" step="0.5" value="0">
+            </div>
+
+            <div class="control-group">
+                <label style="color: #F2994A">Vector $v_2$ ($X, Y, Z$)</label>
+                <input type="range" id="v2x" min="-4" max="4" step="0.5" value="0">
+                <input type="range" id="v2y" min="-4" max="4" step="0.5" value="3">
+                <input type="range" id="v2z" min="-4" max="4" step="0.5" value="0">
+            </div>
+
+            <div class="control-group">
+                <label style="color: #9B51E0">Vector $v_3$ ($X, Y, Z$)</label>
+                <input type="range" id="v3x" min="-4" max="4" step="0.5" value="1">
+                <input type="range" id="v3y" min="-4" max="4" step="0.5" value="1">
+                <input type="range" id="v3z" min="-4" max="4" step="0.5" value="3">
+            </div>
+
+            <div id="depStatus" class="status-badge independent">
+                Linearly Independent
+            </div>
+
+            <p style="text-align: center; font-family: monospace; font-size: 1.1em;">
+                $det(A) = $ <span id="detVal">27.00</span>
+            </p>
+
+            <div style="font-size: 0.8em; color: var(--notion-text-secondary);">
+                <strong>Axiom:</strong> If $det(A) = 0$, the vectors are coplanar and linearly dependent.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let scene, camera, renderer, v1Arr, v2Arr, v3Arr;
+    let container = document.getElementById('canvas-container');
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xfafafa);
+
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(8, 6, 8);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        scene.add(new THREE.GridHelper(10, 10, 0xdddddd, 0xeeeeee));
+        scene.add(new THREE.AxesHelper(5));
+
+        update();
+        animate();
+    }
+
+    function createArrow(dir, color) {
+        return new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(0,0,0), dir.length(), color, 0.3, 0.15);
+    }
+
+    function calculateDet(v1, v2, v3) {
+        // Scalar triple product: v1 . (v2 x v3)
+        const cross = new THREE.Vector3().crossVectors(v2, v3);
+        return v1.dot(cross);
+    }
+
+    function update() {
+        const v1 = new THREE.Vector3(parseFloat(v1x.value), parseFloat(v1z.value), parseFloat(v1y.value));
+        const v2 = new THREE.Vector3(parseFloat(v2x.value), parseFloat(v2z.value), parseFloat(v2y.value));
+        const v3 = new THREE.Vector3(parseFloat(v3x.value), parseFloat(v3z.value), parseFloat(v3y.value));
+
+        if(v1Arr) scene.remove(v1Arr);
+        if(v2Arr) scene.remove(v2Arr);
+        if(v3Arr) scene.remove(v3Arr);
+
+        v1Arr = createArrow(v1, 0x2F80ED);
+        v2Arr = createArrow(v2, 0xF2994A);
+        v3Arr = createArrow(v3, 0x9B51E0);
+
+        scene.add(v1Arr);
+        scene.add(v2Arr);
+        scene.add(v3Arr);
+
+        const det = calculateDet(v1, v2, v3);
+        document.getElementById('detVal').textContent = Math.abs(det) < 0.001 ? "0.00" : det.toFixed(2);
+
+        const status = document.getElementById('depStatus');
+        if (Math.abs(det) < 0.1) {
+            status.textContent = 'Linearly Dependent';
+            status.className = 'status-badge dependent';
+        } else {
+            status.textContent = 'Linearly Independent';
+            status.className = 'status-badge independent';
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        scene.rotation.y += 0.001;
+        renderer.render(scene, camera);
+    }
+
+    window.onresize = () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    };
+
+    const inputs = ['v1x','v1y','v1z','v2x','v2y','v2z','v3x','v3y','v3z'];
+    inputs.forEach(id => document.getElementById(id).addEventListener('input', update));
+
+    init();
+</script>
+</body>
+</html>
